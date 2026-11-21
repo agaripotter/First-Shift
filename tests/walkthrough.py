@@ -5,8 +5,9 @@ from playwright.async_api import async_playwright
 F='file://'+os.path.abspath(os.path.join(os.path.dirname(__file__),'..','index.html'))
 async def main():
   async with async_playwright() as p:
-    b=await p.chromium.launch(args=['--no-sandbox'])
+    b=await p.chromium.launch(args=['--no-sandbox'], **({'executable_path':os.environ['CHROME']} if os.environ.get('CHROME') else {}))
     pg=await b.new_page(viewport={'width':390,'height':844},device_scale_factor=2)
+    await pg.add_init_script("try{if(!localStorage.getItem('firstshift.review.v1'))localStorage.setItem('firstshift.review.v1',JSON.stringify({name:'',items:[],intro:true}))}catch(e){}")
     errs=[]
     pg.on('pageerror',lambda e:errs.append(str(e)))
     pg.on('console',lambda m:errs.append('console:'+m.text) if m.type=='error' else None)

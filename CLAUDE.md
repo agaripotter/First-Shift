@@ -4,14 +4,17 @@ An interactive, single-page induction course for **medical interns starting thei
 
 - **Live:** https://agaripotter.github.io/First-Shift/
 - **Repo:** `agaripotter/First-Shift` (created as `first-shift`; GitHub canonical name has capitals)
-- **Status:** content complete (15 modules, ~6 h), responsive for iPhone / iPad / laptop. Needs review by the hospital's EM faculty (doses) and a native Hijazi speaker (Arabic lines) before wide use.
+- **Status:** content complete (15 modules, ~6 h), responsive for iPhone / iPad / laptop. **The live link currently serves the REVIEW COPY** (since 21 Nov 2026) so hospital reviewers can flag changes — see §2a. The clean course is at `/clean.html`.
 
 ---
 
 ## 1. Repository layout
 
 ```
-index.html            ← BUILT single-file site (served by GitHub Pages). Never edit by hand.
+index.html            ← BUILT site served at the live link (currently the REVIEW COPY). Never edit by hand.
+review.html           ← BUILT review copy (always)
+clean.html            ← BUILT normal course without review tools (always)
+version.json          ← {"build": ...}; open pages poll it and show "A new version is available — Refresh"
 src/
   build.py            ← concatenates everything below into ../index.html
   style.css           ← all styles, incl. responsive breakpoints (bottom of file)
@@ -19,25 +22,30 @@ src/
                         c5: M9–M10, c6: M11–M12, c7: M13–M14, c8: M15 (Night Shift) + POCKET card
   qpatch.js           ← question/case-choice overrides applied at runtime (see §4)
   engine.js           ← app engine: rendering, block types, tools/explorables, glossary, scoring,
-                        storage, sidebar shell, keyboard shortcuts
+                        storage, sidebar shell, keyboard shortcuts, update checker, review hooks
+  review.js           ← review-copy layer (toolbar, highlights, comments, inline edits, notes, export)
 tests/
   check_content.js    ← structural + answer-quality checks (node)
   walkthrough.py      ← Playwright: answers every activity in all 15 modules, screenshots
   devices.py          ← Playwright: screenshots at iPhone / iPad portrait / iPad landscape / laptop
+  review.py           ← Playwright: every review feature at phone + laptop (serves repo over http)
 .nojekyll
 CLAUDE.md             ← this file
 ```
 
-Build order inside the HTML: `style.css` → `c1…c8.js` → `qpatch.js` → `engine.js`.
+Build order inside the HTML: `style.css` → flags (`window.REVIEW`, `window.__BUILD`) → `c1…c8.js` → `qpatch.js` → `engine.js` → `review.js` (review builds only).
 
 ## 2. Build, test, deploy
 
 ```bash
-python3 src/build.py                 # writes index.html (~320 KB)
+python3 src/build.py                 # index.html (= review copy), review.html, clean.html, version.json
+python3 src/build.py --clean-live    # switch the live link back to the clean course (review.html stays)
 node --check src/engine.js           # syntax check (also each c*.js / qpatch.js)
 node tests/check_content.js          # must print "No structural errors." and empty patch warnings
 python3 tests/walkthrough.py         # needs: pip install playwright && playwright install chromium
 python3 tests/devices.py             # visual check, screenshots in ./shots
+python3 tests/review.py              # review copy: highlight, comment, edit, notes, export, persistence, update banner
+# set CHROME=/path/to/chrome if Playwright's bundled Chromium isn't installed
 ```
 
 **Deploy:** GitHub Pages serves the **`gh-pages` branch** (the Pages settings API was blocked, so Pages was enabled by pushing a `gh-pages` branch). Keep `main` and `gh-pages` identical:
@@ -50,6 +58,14 @@ git push origin main && git push origin main:gh-pages
 Live in ~1–2 min. Verify with `gh api "repos/agaripotter/First-Shift/deployments?per_page=1"` → statuses → `success`.
 
 **Anonymity rules (owner's explicit wish):** commit with the neutral author above; never put the owner's real name anywhere in content, metadata or commits. The page has `<meta name="robots" content="noindex, nofollow">` and an anonymous footer: “© 2026 First Shift. All rights reserved…”. The only remaining trace is the username in the URL — moving to a neutrally named GitHub organization was offered as an option.
+
+## 2a. Review copy (live since 21 Nov 2026)
+
+Built on the pattern of the owner's petchem course review copy. A dark toolbar at the bottom: **Edit text** (toggle; tap any text to edit inline — text inside buttons/chips opens a small editor; diagram SVG text can't be edited), **Highlight** (select text first), **Comment** (on this screen, or on the selected text), **Notes** (list with reviewer name, Go to, Delete), **Export** (JSON file; on phones uses the share sheet; "Copy as text" for WhatsApp), **?** (help). A welcome dialog explains it on first visit. **Continue is always unlocked** in the review build. Notes save in `localStorage` key `firstshift.review.v1` (per device + browser). Course progress keeps the normal key, so existing users keep their progress.
+
+**Applying a reviewer's export** (`FirstShift_review_<name>_<date>.json`): each item has `type` (edit / highlight / comment-on-text / comment), `where` (human label), `loc` (`m` module id, `i` screen index, `k` block key `m:screen:block`, `path` child-index path inside the block for edits, `start`/`end` text offsets for highlights) and `before`/`after` (+HTML) or `quote`/`comment`. For each edit, search the `before` text in `src/qpatch.js` first (questions/case choices live there), then `src/c*.js`; keep `{DR}`/`{m|f}` tokens and HTML balanced. Comments are judgement calls — list them for the owner rather than guessing. Rebuild, run the tests, deploy. Keep a short changelog in the commit message.
+
+**Update prompt:** every build writes `version.json`; open pages check it on load, every 10 min and when the tab becomes visible, and show a "Refresh" banner if the build changed. That is how people who already have the link open (or saved to their home screen) get pushed updates.
 
 ## 3. Content model (engine)
 
@@ -77,7 +93,7 @@ Text helpers in every rendered string: `{DR}` → “Dr. <name>”; `{masculine|
 
 Glossary: terms in `GLOSS` (engine.js) get a dotted underline + tap-to-define popover, first occurrence per screen.
 
-Scoring/progress live in `localStorage` key **`firstshift.cmc.v3`**. **Bump the version** whenever you add/remove/reorder blocks or questions (keys are `moduleId:screen:block`), otherwise old saved answers attach to the wrong blocks.
+Scoring/progress live in `localStorage` key **`firstshift.cmc.v3`** (review notes: `firstshift.review.v1`). **Bump the version** whenever you add/remove/reorder blocks or questions (keys are `moduleId:screen:block`), otherwise old saved answers attach to the wrong blocks.
 
 ## 4. Technical debt to know about
 
@@ -113,7 +129,7 @@ Scoring/progress live in `localStorage` key **`firstshift.cmc.v3`**. **Bump the 
 
 ## 8. Open items / ideas
 
-1. Faculty review of all doses and “CMC policy” items; native Hijazi review of every `say` line.
+1. Faculty review of all doses and “CMC policy” items; native Hijazi review of every `say` line — **in progress via the review copy**. When reviews come back, apply them (§2a), then run `python3 src/build.py --clean-live` to make the live link the clean course again.
 2. Fold `qpatch.js` into the content files.
 3. Optional: full Arabic UI toggle (only patient lines are Arabic today).
 4. Optional: move to a neutral GitHub organization (anonymity), or let the hospital host it.

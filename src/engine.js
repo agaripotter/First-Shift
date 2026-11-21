@@ -436,13 +436,15 @@ function renderMod(){
   APP.innerHTML=top(`<button class="iconbtn" data-act="home">All modules</button>`)+`<div class="wrap"><div class="mhead"><div class="k">${m.final?'Final simulation':'Module '+m.n} · ${m.mins} min</div><h2>${m.title}</h2><div class="steps">${steps}</div></div><div class="scr" id="scr">${body}</div></div>`+
    (endScr?'':`<div class="navbar"><div class="wrap"><button class="btn ghost" data-act="prev" ${i===0?'disabled':''}>←</button><div class="hint" id="hint"></div><button class="btn" id="nextb" data-act="next">${i===m.s.length-1?'Finish module':'Continue'} →</button></div></div>`);shell();
   gate();gloss(document.getElementById('scr'));window.scrollTo(0,0);
+  if(window.__afterRender)window.__afterRender(document.getElementById('app'));
 }
 function gate(){const m=M();if(!m||VIEW.i>=m.s.length)return;const keys=m.s[VIEW.i].map((b,bi)=>m.id+':'+VIEW.i+':'+bi);const left=keys.filter(k=>!answered(k)).length;
-  const nb=document.getElementById('nextb'),h=document.getElementById('hint');if(!nb)return;nb.disabled=left>0;h.textContent=left?`Answer the ${left>1?left+' activities':'activity'} on this screen to continue`+(FINE?' · A–D to answer':''):(FINE?'Press → or Enter to continue':'');}
-function rerender(k){const el=document.getElementById('b-'+k);if(!el)return;const t=document.createElement('div');t.innerHTML=rb(BLK[k],k);const nn=t.firstChild;el.replaceWith(nn);gate();if(!['tool'].includes(BLK[k].t))gloss(nn);}
+  const nb=document.getElementById('nextb'),h=document.getElementById('hint');if(!nb)return;
+  if(window.REVIEW){nb.disabled=false;h.textContent=left?'Review copy — Continue is unlocked':(FINE?'Press → or Enter to continue':'');return;}nb.disabled=left>0;h.textContent=left?`Answer the ${left>1?left+' activities':'activity'} on this screen to continue`+(FINE?' · A–D to answer':''):(FINE?'Press → or Enter to continue':'');}
+function rerender(k){const el=document.getElementById('b-'+k);if(!el)return;const t=document.createElement('div');t.innerHTML=rb(BLK[k],k);const nn=t.firstChild;el.replaceWith(nn);gate();if(!['tool'].includes(BLK[k].t))gloss(nn);if(window.__afterRender)window.__afterRender(nn);}
 
 function pocket(){
-  APP.innerHTML=top(`<button class="iconbtn" data-act="home">All modules</button>`)+`<div class="wrap"><div class="mhead"><div class="k">Quick reference</div><h2>Pocket card</h2><p style="color:var(--mute);margin:8px 0 0">Screenshot what you need. Always confirm doses against the CMC formulary and your senior.</p></div><div class="pkgrid">${window.POCKET.map(p=>`<div class="pk"><h3>${p[0]}</h3><dl>${p[1].map(r=>`<dt>${r[0]}</dt><dd>${r[1]}</dd>`).join('')}</dl></div>`).join('')}</div><div style="height:60px"></div></div>`;shell();window.scrollTo(0,0);}
+  APP.innerHTML=top(`<button class="iconbtn" data-act="home">All modules</button>`)+`<div class="wrap"><div class="mhead"><div class="k">Quick reference</div><h2>Pocket card</h2><p style="color:var(--mute);margin:8px 0 0">Screenshot what you need. Always confirm doses against the CMC formulary and your senior.</p></div><div class="pkgrid">${window.POCKET.map(p=>`<div class="pk"><h3>${p[0]}</h3><dl>${p[1].map(r=>`<dt>${r[0]}</dt><dd>${r[1]}</dd>`).join('')}</dl></div>`).join('')}</div><div style="height:60px"></div></div>`;shell();window.scrollTo(0,0);if(window.__afterRender)window.__afterRender(document.getElementById('app'));}
 function cert(){
   const st=allStats();const ok=st.done===st.n;const d=new Date().toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'});
   const fin=window.MODULES.find(m=>m.final);const fs=fin?modStats(fin):{pct:0};
@@ -505,7 +507,12 @@ APP.addEventListener('change',e=>{const el=e.target;if(el.dataset&&el.dataset.ac
 function rerenderKeepFocus(k,el){const f=el.dataset.f||el.dataset.act;rerender(k);const n=document.querySelector(`#b-${CSS.escape(k)} input[data-act="${el.dataset.act}"]${el.dataset.f?`[data-f="${f}"]`:''}`);if(n){n.focus();const v=n.value;try{n.setSelectionRange(v.length,v.length);}catch(_){}}}
 
 
-document.addEventListener('keydown',ev=>{if(VIEW.v!=='mod')return;const t=ev.target;if(t&&(t.tagName==='INPUT'||t.tagName==='SELECT'||t.tagName==='TEXTAREA'))return;if(ev.metaKey||ev.ctrlKey||ev.altKey)return;
+window.__fs={openMod:(id,i)=>openMod(id,i),view:()=>VIEW,home:()=>{VIEW={v:'home'};home();}};
+/* update checker: tells people with the page already open that a newer version is live */
+const BUILD='__BUILD__';
+function checkUpdate(){if(!/^https?:/.test(location.protocol))return;fetch('version.json?t='+Date.now(),{cache:'no-store'}).then(r=>r.ok?r.json():null).then(j=>{if(j&&j.build&&j.build!==BUILD&&!document.getElementById('updbar')){const d=document.createElement('div');d.id='updbar';d.className='rv-ui';d.innerHTML='<span>A new version of First Shift is available.</span><button>Refresh</button>';d.querySelector('button').onclick=()=>location.reload();document.body.appendChild(d);}}).catch(()=>{});}
+setTimeout(checkUpdate,2500);setInterval(checkUpdate,600000);document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')checkUpdate();});
+document.addEventListener('keydown',ev=>{if(VIEW.v!=='mod')return;const t=ev.target;if(t&&(t.tagName==='INPUT'||t.tagName==='SELECT'||t.tagName==='TEXTAREA'||t.isContentEditable||(t.closest&&t.closest('.rv-ui'))))return;if(document.body.classList.contains('rv-edit'))return;if(ev.metaKey||ev.ctrlKey||ev.altKey)return;
   const key=ev.key;
   if(key==='ArrowRight'||key==='Enter'){const nb=document.getElementById('nextb');if(nb&&!nb.disabled){ev.preventDefault();nb.click();}else if(!nb&&key==='Enter'){const b=document.querySelector('.end .btn');if(b)b.click();}return;}
   if(key==='ArrowLeft'){const pb=document.querySelector('.navbar [data-act=prev]');if(pb&&!pb.disabled){ev.preventDefault();pb.click();}return;}

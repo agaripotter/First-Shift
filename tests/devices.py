@@ -6,11 +6,12 @@ F='file://'+os.path.abspath(os.path.join(os.path.dirname(__file__),'..','index.h
 VPS={'iphone':(390,844,3,True),'ipad_p':(820,1180,2,True),'ipad_l':(1180,820,2,True),'laptop':(1440,900,1,False)}
 async def main():
   async with async_playwright() as p:
-    b=await p.chromium.launch(args=['--no-sandbox'])
+    b=await p.chromium.launch(args=['--no-sandbox'], **({'executable_path':os.environ['CHROME']} if os.environ.get('CHROME') else {}))
     errs=[]
     for name,(w,h,dpr,touch) in VPS.items():
       ctx=await b.new_context(viewport={'width':w,'height':h},device_scale_factor=dpr,has_touch=touch,is_mobile=touch and w<700)
       pg=await ctx.new_page();pg.on('pageerror',lambda e:errs.append(name+': '+str(e)))
+      await pg.add_init_script("try{if(!localStorage.getItem('firstshift.review.v1'))localStorage.setItem('firstshift.review.v1',JSON.stringify({name:'',items:[],intro:true}))}catch(e){}")
       await pg.goto(F);await pg.wait_for_timeout(900)
       await pg.screenshot(path=f'shots/r_{name}_home.png')
       # module 2 screen with ctas explorer
